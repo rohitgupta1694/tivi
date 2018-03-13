@@ -17,7 +17,6 @@
 package android.support.transition
 
 import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
@@ -32,6 +31,9 @@ import android.support.v7.widget.RecyclerView
 import android.util.Property
 import android.view.View
 import android.view.ViewGroup
+import androidx.animation.doOnEnd
+import androidx.view.isInvisible
+import androidx.view.isVisible
 import me.banes.chris.tivi.ui.transitions.DrawableAlphaProperty
 
 /**
@@ -137,12 +139,10 @@ class ColumnedChangeBounds : Transition() {
             anim = createPointToPointAnimator(sceneRoot, startView, startBounds, endBounds)
         }
 
-        endView.visibility = View.INVISIBLE
-        anim.addListener(object : AnimatorListenerAdapter() {
-            override fun onAnimationEnd(animation: Animator) {
-                endView.visibility = View.VISIBLE
-            }
-        })
+        endView.isInvisible = true
+        anim.doOnEnd {
+            endView.isVisible = true
+        }
 
         if (startView.parent is ViewGroup) {
             val parent = startView.parent as ViewGroup
@@ -259,12 +259,9 @@ class ColumnedChangeBounds : Transition() {
             }
         }
 
-        anim.addListener(object : AnimatorListenerAdapter() {
-            override fun onAnimationEnd(animation: Animator) {
-                ViewUtils.getOverlay(sceneRoot).remove(drawable.drawable)
-            }
-        })
-
+        anim.doOnEnd {
+            ViewUtils.getOverlay(sceneRoot).remove(drawable.drawable)
+        }
         return anim
     }
 
@@ -313,8 +310,9 @@ class ColumnedChangeBounds : Transition() {
     }
 
     private class DrawableBounds(val drawable: Drawable) : PointFBounds() {
-        override fun setLeftTopRightBottom(left: Int, top: Int, right: Int, bottom: Int) =
-                drawable.setBounds(left, top, right, bottom)
+        override fun setLeftTopRightBottom(left: Int, top: Int, right: Int, bottom: Int) {
+            drawable.setBounds(left, top, right, bottom)
+        }
     }
 
     private abstract class PointFBounds {
