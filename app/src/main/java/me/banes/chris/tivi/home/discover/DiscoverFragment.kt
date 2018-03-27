@@ -84,7 +84,9 @@ internal class DiscoverFragment : HomeFragment<DiscoverViewModel>() {
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         super.onActivityCreated(savedInstanceState)
         viewModel.data.observeK(this) { model ->
-            controller.setData(model?.trendingItems, model?.popularItems, model?.tmdbImageUrlProvider)
+            controller.trendingItems = model?.trendingItems
+            controller.popularItems = model?.popularItems
+            controller.tmdbImageUrlProvider = model?.tmdbImageUrlProvider
             scheduleStartPostponedTransitions()
         }
     }

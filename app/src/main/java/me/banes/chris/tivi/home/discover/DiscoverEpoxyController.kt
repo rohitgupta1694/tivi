@@ -17,7 +17,7 @@
 package me.banes.chris.tivi.home.discover
 
 import android.view.View
-import com.airbnb.epoxy.Typed3EpoxyController
+import com.airbnb.epoxy.EpoxyController
 import me.banes.chris.tivi.R
 import me.banes.chris.tivi.data.Entry
 import me.banes.chris.tivi.data.entities.ListItem
@@ -27,11 +27,15 @@ import me.banes.chris.tivi.emptyState
 import me.banes.chris.tivi.header
 import me.banes.chris.tivi.posterGridItem
 import me.banes.chris.tivi.tmdb.TmdbImageUrlProvider
+import me.banes.chris.tivi.ui.epoxy.EpoxyModelProperty
 import me.banes.chris.tivi.ui.epoxy.TotalSpanOverride
 
 class DiscoverEpoxyController(
     private val callbacks: Callbacks
-) : Typed3EpoxyController<List<ListItem<TrendingEntry>>, List<ListItem<PopularEntry>>, TmdbImageUrlProvider>() {
+) : EpoxyController() {
+    var trendingItems: List<ListItem<TrendingEntry>>? by EpoxyModelProperty()
+    var popularItems: List<ListItem<PopularEntry>>? by EpoxyModelProperty()
+    var tmdbImageUrlProvider: TmdbImageUrlProvider? by EpoxyModelProperty()
 
     interface Callbacks {
         fun onTrendingHeaderClicked(items: List<ListItem<TrendingEntry>>?)
@@ -39,20 +43,18 @@ class DiscoverEpoxyController(
         fun onItemClicked(item: ListItem<out Entry>)
     }
 
-    override fun buildModels(
-        trending: List<ListItem<TrendingEntry>>?,
-        popular: List<ListItem<PopularEntry>>?,
-        tmdbImageUrlProvider: TmdbImageUrlProvider?
-    ) {
+    override fun buildModels() {
         header {
             id("trending_header")
             title(R.string.discover_trending)
             spanSizeOverride(TotalSpanOverride)
             buttonClickListener(View.OnClickListener {
-                callbacks.onTrendingHeaderClicked(trending)
+                callbacks.onTrendingHeaderClicked(trendingItems)
             })
         }
-        if (trending != null && !trending.isEmpty()) {
+
+        val trending = trendingItems
+        if (trending != null && trending.isNotEmpty()) {
             trending.take(spanCount * 2).forEach { item ->
                 posterGridItem {
                     id(item.generateStableId())
@@ -79,10 +81,11 @@ class DiscoverEpoxyController(
             title(R.string.discover_popular)
             spanSizeOverride(TotalSpanOverride)
             buttonClickListener(View.OnClickListener {
-                callbacks.onPopularHeaderClicked(popular)
+                callbacks.onPopularHeaderClicked(popularItems)
             })
         }
-        if (popular != null && !popular.isEmpty()) {
+        val popular = popularItems
+        if (popular != null && popular.isNotEmpty()) {
             popular.take(spanCount * 2).forEach { item ->
                 posterGridItem {
                     id(item.generateStableId())
