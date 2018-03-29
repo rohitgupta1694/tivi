@@ -71,10 +71,6 @@ abstract class HomeFragment<VM : HomeFragmentViewModel> : TiviFragment() {
             viewModel.onLoginItemClicked()
             true
         }
-        R.id.home_menu_settings -> {
-            viewModel.onSettingsItemClicked()
-            true
-        }
         else -> false
     }
 
@@ -87,5 +83,4 @@ abstract class HomeFragment<VM : HomeFragmentViewModel> : TiviFragment() {
     }
 
     open fun getMenu(): Menu? = null
-
 }

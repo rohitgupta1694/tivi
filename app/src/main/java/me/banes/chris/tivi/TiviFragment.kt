@@ -18,15 +18,17 @@ package me.banes.chris.tivi
 
 import android.os.Bundle
 import android.support.transition.TransitionInflater
-import android.view.View
 import android.view.ViewGroup
+import androidx.view.doOnPreDraw
 import dagger.android.support.DaggerFragment
-import me.banes.chris.tivi.extensions.doOnPreDraw
 
 /**
  * Base fragment class which supports LifecycleOwner and Dagger injection.
  */
 abstract class TiviFragment : DaggerFragment() {
+
+    private var startedTransition = false
+    private var postponed = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,63 +39,32 @@ abstract class TiviFragment : DaggerFragment() {
         }
     }
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        setupParentWindowInsetsForTransition()
+    override fun postponeEnterTransition() {
+        super.postponeEnterTransition()
+        postponed = true
     }
 
     override fun onStart() {
         super.onStart()
 
-        if (canStartTransition()) {
-            scheduleStartPostponedTransitions()
+        if (postponed && !startedTransition) {
+            // If we're postponed and haven't started a transition yet, we'll delay for a max of 200ms
+            view?.postDelayed(this::scheduleStartPostponedTransitions, 200)
         }
     }
 
-    protected open fun canStartTransition(): Boolean = true
-
-    private fun setupParentWindowInsetsForTransition() {
-        val root = view!!
-        val container = root.parent as ViewGroup
-
-        val currentSysUiFlags = container.systemUiVisibility
-
-        // Lets declare the container as fullscreen stable so that we get some insets
-        // dispatched
-        container.systemUiVisibility = currentSysUiFlags or
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-
-        container.setOnApplyWindowInsetsListener { view, insets ->
-            if (root.isShown) {
-                // If the fragment view is now shown, we can revert back to our
-                // original sys-ui-vis flags
-                view.apply {
-                    systemUiVisibility = currentSysUiFlags
-                    setOnApplyWindowInsetsListener(null)
-                }
-
-                // And make the fragment root declare them instead
-                root.apply {
-                    systemUiVisibility = systemUiVisibility or
-                            View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-                            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    requestApplyInsets()
-                }
-            }
-
-            // Lets manually dispatch them to the fragment root
-            root.dispatchApplyWindowInsets(insets)
-        }
-
-        // Finally request some insets
-        container.requestApplyInsets()
+    override fun onStop() {
+        super.onStop()
+        startedTransition = false
     }
 
     protected fun scheduleStartPostponedTransitions() {
-        (view?.parent as ViewGroup).doOnPreDraw {
-            startPostponedEnterTransition()
-            activity?.startPostponedEnterTransition()
+        if (!startedTransition) {
+            (view?.parent as? ViewGroup)?.doOnPreDraw {
+                startPostponedEnterTransition()
+                activity?.startPostponedEnterTransition()
+            }
+            startedTransition = true
         }
     }
 }

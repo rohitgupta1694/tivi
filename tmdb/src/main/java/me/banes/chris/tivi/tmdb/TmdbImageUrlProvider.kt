@@ -16,13 +16,21 @@
 
 package me.banes.chris.tivi.tmdb
 
-class TmdbImageUrlProvider(private val imageSizes: TmdbImageSizes) {
+private const val IMAGE_SIZE_PATTERN = "w(\\d+)$"
 
-    fun getPosterUrl(path: String, imageWidth: Int): String =
-            "${imageSizes.baseImageUrl}${selectSize(imageSizes.posterSizes, imageWidth)}$path"
+class TmdbImageUrlProvider(
+    private var baseImageUrl: String = TmdbImageSizes.baseImageUrl,
+    private var posterSizes: Array<String> = TmdbImageSizes.posterSizes,
+    private var backdropSizes: Array<String> = TmdbImageSizes.backdropSizes
+) {
 
-    fun getBackdropUrl(path: String, imageWidth: Int): String =
-            "${imageSizes.baseImageUrl}${selectSize(imageSizes.backdropSizes, imageWidth)}$path"
+    fun getPosterUrl(path: String, imageWidth: Int): String {
+        return "$baseImageUrl${selectSize(posterSizes, imageWidth)}$path"
+    }
+
+    fun getBackdropUrl(path: String, imageWidth: Int): String {
+        return "$baseImageUrl${selectSize(backdropSizes, imageWidth)}$path"
+    }
 
     private fun selectSize(sizes: Array<String>, imageWidth: Int, forceLarger: Boolean = false): String {
         var previousSize: String? = null
@@ -30,20 +38,13 @@ class TmdbImageUrlProvider(private val imageSizes: TmdbImageSizes) {
 
         for (i in sizes.indices) {
             val size = sizes[i]
-            val indexOfW = size.indexOf('w')
-
-            if (indexOfW < 0) {
-                // This dimension doesn't start with w, so skip
-                continue
-            }
-
-            val sizeWidth = size.substring(indexOfW + 1 until size.length).toInt()
+            val sizeWidth = extractWidthAsIntFrom(size) ?: continue
 
             if (sizeWidth > imageWidth) {
-                return if (forceLarger || (previousSize != null && imageWidth > (previousWidth + sizeWidth) / 2)) {
-                    size
-                } else {
-                    previousSize!!
+                if (forceLarger || (previousSize != null && imageWidth > (previousWidth + sizeWidth) / 2)) {
+                    return size
+                } else if (previousSize != null) {
+                    return previousSize
                 }
             } else if (i == sizes.size - 1) {
                 // If we get here then we're larger than the last bucket
@@ -59,4 +60,7 @@ class TmdbImageUrlProvider(private val imageSizes: TmdbImageSizes) {
         return previousSize ?: sizes.last()
     }
 
+    private fun extractWidthAsIntFrom(size: String): Int? {
+        return IMAGE_SIZE_PATTERN.toRegex().matchEntire(size)?.groups?.get(1)?.value?.toInt()
+    }
 }

@@ -21,6 +21,7 @@ import android.content.Context
 import android.os.Debug
 import dagger.Module
 import dagger.Provides
+import me.banes.chris.tivi.data.daos.MyShowsDao
 import me.banes.chris.tivi.data.daos.PopularDao
 import me.banes.chris.tivi.data.daos.TiviShowDao
 import me.banes.chris.tivi.data.daos.TrendingDao
@@ -30,7 +31,6 @@ import javax.inject.Singleton
 
 @Module
 class DatabaseModule {
-
     @Singleton
     @Provides
     fun provideDatabase(context: Context): TiviDatabase {
@@ -56,6 +56,9 @@ class DatabaseModule {
 
     @Provides
     fun provideWatchedDao(db: TiviDatabase): WatchedDao = db.watchedDao()
+
+    @Provides
+    fun provideMyShowsDao(db: TiviDatabase): MyShowsDao = db.myShowsDao()
 
     @Singleton
     @Provides

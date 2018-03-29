@@ -28,38 +28,44 @@ import android.support.v7.widget.RecyclerView
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.view.doOnLayout
+import androidx.view.updatePadding
 import kotlinx.android.synthetic.main.fragment_rv_grid.*
 import me.banes.chris.tivi.R
 import me.banes.chris.tivi.TiviFragment
 import me.banes.chris.tivi.api.Status
 import me.banes.chris.tivi.data.Entry
 import me.banes.chris.tivi.data.entities.ListItem
-import me.banes.chris.tivi.extensions.doWhenLaidOut
 import me.banes.chris.tivi.extensions.observeK
-import me.banes.chris.tivi.extensions.updatePadding
 import me.banes.chris.tivi.ui.EndlessRecyclerViewScrollListener
 import me.banes.chris.tivi.ui.ProgressTimeLatch
-import me.banes.chris.tivi.ui.ShowPosterGridAdapter
 import me.banes.chris.tivi.ui.SpacingItemDecorator
 import javax.inject.Inject
 
 @SuppressLint("ValidFragment")
 abstract class EntryGridFragment<LI : ListItem<out Entry>, VM : EntryViewModel<LI>>(
-        private val vmClass: Class<VM>
+    private val vmClass: Class<VM>
 ) : TiviFragment() {
 
     @Inject lateinit var viewModelFactory: ViewModelProvider.Factory
 
     protected lateinit var viewModel: VM
 
-    protected lateinit var adapter: ShowPosterGridAdapter<LI>
     private lateinit var swipeRefreshLatch: ProgressTimeLatch
-
     private var originalRvTopPadding = 0
+
+    private lateinit var controller: EntryGridEpoxyController<LI>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         viewModel = ViewModelProviders.of(this, viewModelFactory).get(vmClass)
+
+        controller = createController()
+        controller.callbacks = object : EntryGridEpoxyController.Callbacks<LI> {
+            override fun onItemClicked(item: LI) {
+                this@EntryGridFragment.onItemClicked(item)
+            }
+        }
 
         GridToGridTransitioner.setupSecondFragment(this,
                 intArrayOf(R.id.grid_toolbar, R.id.grid_status_scrim)) {
@@ -77,22 +83,18 @@ abstract class EntryGridFragment<LI : ListItem<out Entry>, VM : EntryViewModel<L
         postponeEnterTransition()
 
         swipeRefreshLatch = ProgressTimeLatch(minShowTime = 1350) {
-            grid_swipe_refresh.isRefreshing = it
+            grid_swipe_refresh?.isRefreshing = it
         }
 
         val layoutManager = grid_recyclerview.layoutManager as GridLayoutManager
-        adapter = createAdapter(layoutManager.spanCount)
-
-        layoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
-            override fun getSpanSize(position: Int): Int = adapter.getItemColumnSpan(position)
-        }
 
         grid_recyclerview.apply {
             // We set the item animator to null since it can interfere with the enter/shared element
             // transitions
             itemAnimator = null
 
-            adapter = this@EntryGridFragment.adapter
+            adapter = controller.adapter
+
             addItemDecoration(SpacingItemDecorator(paddingLeft))
             addOnScrollListener(EndlessRecyclerViewScrollListener(layoutManager, { _: Int, _: RecyclerView ->
                 if (userVisibleHint) {
@@ -104,16 +106,16 @@ abstract class EntryGridFragment<LI : ListItem<out Entry>, VM : EntryViewModel<L
 
         grid_swipe_refresh.setOnRefreshListener(viewModel::fullRefresh)
 
+        grid_root.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
         grid_root.setOnApplyWindowInsetsListener { _, insets ->
             val topInset = insets.systemWindowInsetTop
 
-            grid_toolbar.doWhenLaidOut {
-                grid_recyclerview.updatePadding(paddingTop = topInset + originalRvTopPadding + grid_toolbar.height)
+            grid_toolbar.doOnLayout {
+                grid_recyclerview.updatePadding(top = topInset + originalRvTopPadding + grid_toolbar.height)
             }
 
             val tlp = (grid_toolbar.layoutParams as ConstraintLayout.LayoutParams)
             tlp.topMargin = topInset
-            grid_toolbar.layoutParams = tlp
             grid_toolbar.layoutParams = tlp
 
             val scrimLp = (grid_status_scrim.layoutParams as ConstraintLayout.LayoutParams)
@@ -123,6 +125,7 @@ abstract class EntryGridFragment<LI : ListItem<out Entry>, VM : EntryViewModel<L
 
             insets.consumeSystemWindowInsets()
         }
+        grid_root.requestApplyInsets()
 
         grid_recyclerview.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
@@ -141,27 +144,34 @@ abstract class EntryGridFragment<LI : ListItem<out Entry>, VM : EntryViewModel<L
         })
 
         viewModel.liveList.observeK(this) {
-            adapter.setList(it)
-            startPostponedEnterTransition()
+            controller.setList(it)
+            scheduleStartPostponedTransitions()
         }
 
-        viewModel.messages.observeK(this) {
-            when (it?.status) {
-                Status.SUCCESS -> {
-                    swipeRefreshLatch.refreshing = false
-                    adapter.isLoading = false
+        viewModel.viewState.observeK(this) {
+            controller.tmdbImageUrlProvider = it?.tmdbImageUrlProvider
+
+            it?.resource?.let {
+                when (it.status) {
+                    Status.SUCCESS -> {
+                        swipeRefreshLatch.refreshing = false
+                        controller.isLoading = false
+                    }
+                    Status.ERROR -> {
+                        swipeRefreshLatch.refreshing = false
+                        controller.isLoading = false
+                        Snackbar.make(grid_recyclerview, it.message ?: "EMPTY", Snackbar.LENGTH_SHORT).show()
+                    }
+                    Status.REFRESHING -> swipeRefreshLatch.refreshing = true
+                    Status.LOADING_MORE -> controller.isLoading = true
                 }
-                Status.ERROR -> {
-                    swipeRefreshLatch.refreshing = false
-                    adapter.isLoading = false
-                    Snackbar.make(grid_recyclerview, it.message ?: "EMPTY", Snackbar.LENGTH_SHORT).show()
-                }
-                Status.REFRESHING -> swipeRefreshLatch.refreshing = true
-                Status.LOADING_MORE -> adapter.isLoading = true
             }
         }
     }
 
-    open fun createAdapter(spanCount: Int): ShowPosterGridAdapter<LI> = ShowPosterGridAdapter(spanCount)
+    abstract fun onItemClicked(item: LI)
 
+    open fun createController(): EntryGridEpoxyController<LI> {
+        return EntryGridEpoxyController()
+    }
 }

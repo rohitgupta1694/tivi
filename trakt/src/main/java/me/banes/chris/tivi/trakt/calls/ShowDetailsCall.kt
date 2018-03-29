@@ -26,14 +26,13 @@ import me.banes.chris.tivi.util.AppRxSchedulers
 import javax.inject.Inject
 
 class ShowDetailsCall @Inject constructor(
-        private val dao: TiviShowDao,
-        private val traktShowFetcher: TraktShowFetcher,
-        private val schedulers: AppRxSchedulers
+    private val dao: TiviShowDao,
+    private val traktShowFetcher: TraktShowFetcher,
+    private val schedulers: AppRxSchedulers
 ) : Call<Long, TiviShow> {
 
     override fun refresh(param: Long): Completable {
-        return dao.getShowWithIdFlowable(param)
-                .firstElement()
+        return dao.getShowWithIdMaybe(param)
                 .subscribeOn(schedulers.database)
                 .map(TiviShow::traktId)
                 .flatMapSingle(traktShowFetcher::updateShow)
